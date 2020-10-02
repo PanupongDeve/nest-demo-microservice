@@ -1,0 +1,31 @@
+trigger:
+    - 'ci-dev'
+    
+pool:
+      name: 'CJ-API'
+      demands:
+        - agent.name -equals cj-dev-api
+    
+steps:
+    - script: '/home/ubuntu/auth/docker-hub-auth.sh'
+      displayName: 'auth dockerhub and access docker'
+
+    - script: |
+        source /home/ubuntu/cj-kube-file/dev/k8s-env/cj-demo.sh
+        source /home/ubuntu/cj-kube-file/dev/secret-store-env/cj-demo.sh
+        echo $PROJECT_DOCKER_IMAGE
+        docker ps
+        docker build -t $PROJECT_DOCKER_IMAGE .
+        docker push $PROJECT_DOCKER_IMAGE
+        /home/ubuntu/cj-kube-file/scripts/generate-deployment.yaml.sh
+      displayName: 'build project'
+      failOnStderr: true
+
+    - script: |
+        source /home/ubuntu/cj-kube-file/dev/k8s-env/cj-demo.sh
+        source /home/ubuntu/cj-kube-file/dev/secret-store-env/cj-demo.sh
+        kubectl apply -f /home/ubuntu/cj-kube-file/dev/1_namespace.yaml
+        kubectl delete secret $K8S_SECRET_NAME -n $K8S_NAMESPACE || true
+        kubectl create secret generic $K8S_SECRET_NAME --from-env-file=$K8S_IMPORT_ENV_PART -n $K8S_NAMESPACE
+        kubectl apply -f /home/ubuntu/cj-kube-file/dev
+      displayName: 'deploy project'
